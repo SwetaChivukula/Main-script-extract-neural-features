@@ -1,4 +1,4 @@
-% working main code
+% working main code with sample and hold added
 
 % preprocessNeuralDataTactorSingleAuto
 % Running computeNeuralBasics on Tactor Single Auto Data
@@ -16,32 +16,35 @@ stimulationDataDir = 'C:\Users\chivu\OneDrive\Documents\MATLAB\research_project_
 %saveDir = 'C:\Users\bchut\Documents\Research\SensoryFeedbackAnalysis\data\2021-11-19 Tactor Single Preliminary 1\ProcessedData';
 neuralDataSaveDir = 'C:\Users\chivu\OneDrive\Documents\MATLAB\research_project_graczyk\NSP Data';
 %list of blocks to process (e.g., formatBlockList = [1 2 3 4 5 6 7 8 9 10])
-formatBlockList = [1:3]; %1:3 for motor cortex since last file didn't save correctly
+% formatBlockList = [6,10]; %1:3 for motor cortex since last file didn't save correctly %changed to 6,10
 excludeElectrodes = cell(3,1);
 excludeChannels = cell(3,1);
 
 
 
-excludeElectrodes{1} = [98,128]; %update with bad electrodes, 10 and 123 included
-excludeChannels{1} = [96,65];%
+% excludeElectrodes{1} = [98,128]; %update with bad electrodes, 10 and 123 included
+% excludeChannels{1} = [96,65];% go through channels to pick out noisy ones
 
 %% Review the Data
-for blockIdx=1:length(formatBlockList)
+NSPFilenums = 1:3;
+numNSPFiles = length(NSPFilenums);
+
+for NSPFileIdx=1:numNSPFiles
     % Signal to the command window the status of the reformatting
-    disp(['Formatting block ' num2str(formatBlockList(blockIdx))]);
+    disp(['Formatting NSP ' num2str(NSPFileIdx)]);
     % blockNumber = formatBlockList(blockIdx);
-    %for NSPIdx = 1:3
+    % for NSPIdx = 1:3
         % Find the NSP Files
-        nspFileSearchString = [neuralDataDir filesep 'RP01_ICMS_2-Contact_Characterization_*_NSP' num2str(blockIdx) '*.ns5']; % note the NSP counter was offset by one
+        nspFileSearchString = [neuralDataDir filesep 'RP01_ICMS_2-Contact_Characterization_*_NSP' num2str(NSPFileIdx) '*.ns5']; % note the NSP counter was offset by one
         nspFiles = dir(nspFileSearchString);
         if isempty(nspFiles)
-            error(['No NSP files found for block ' num2str(blockIdx) ' that matched the search string: ' nspFileSearchString]);
+            error(['No NSP files found for block ' num2str(NSPFileIdx) ' that matched the search string: ' nspFileSearchString]);
         end
-
-    for NSPFileIdx = 1:length(nspFiles)
-        nspFiles = nspFiles(1:length(nspFiles)); % Take the first 3 assuming the number of blocks goes from 1:99 to avoid confusion between 1 and 11
+    numBlocks = length(nspFiles);
+    for blockIdx = 1:numBlocks 
+        % nspFiles = nspFiles(1:length(nspFiles)); % Take the first 3 assuming the number of blocks goes from 1:99 to avoid confusion between 1 and 11
         % Find the Stimulation File
-        blockNumber = NSPFileIdx;
+        % blockNumber = NSPFileIdx;
         stimulationFileSearchString = [stimulationDataDir filesep 'RP01_ICMS_2-Contact_Characterization*.mat'];
         stimulationFiles = dir(stimulationFileSearchString);
         % stimulationFile = stimulationFiles(blockNumber);
@@ -53,17 +56,14 @@ for blockIdx=1:length(formatBlockList)
 %%
 % eventually make a for loop at (1)
         % Load the stimulation .mat file
-        stimStruct = load([stimulationDataDir filesep stimulationFiles(NSPFileIdx).name]);
+        stimStruct = load([stimulationDataDir filesep stimulationFiles(blockIdx).name]);
         
-        %nspFilename = nspFiles(1).name; % For the sensory cortex
-        nspFilename = nspFiles(NSPFileIdx).name; % for any cortex
+        %nspFilename = nspFiles(1).name; % For the sensory cortex % try
+        %uncommenting this line to run sensory properly
+        nspFilename = nspFiles(blockIdx).name; % for any cortex
         % Load the neural data .ns5 file
-        %if(blockNumber == 6) % JUST FOR RECEPTIVE FIELD MAPPING DAY
-        %NS5 = openNSx([neuralDataDir filesep nspFilename],'read','t:0:7','min'); % Converts the ns5 file to a matlab friendly file
-        %else
         NS5 = openNSx([neuralDataDir filesep nspFilename],'read'); % Converts the ns5 file to a matlab friendly file
-        %end
-        excludeChannelsNSP = excludeChannels{blockIdx}; %blockIdx used to be NSPIdx
+        excludeChannelsNSP = excludeChannels{NSPFileIdx}; 
         
         %% Analyze neural data - Threshold Crossings (binned & spike times), Spike Power
         threshold = -4.5; % threshold crossing RMS multiplier
@@ -71,11 +71,9 @@ for blockIdx=1:length(formatBlockList)
         %filterRange = [300 5000];
         filterRange = [250 5000];
 
-        % changing electrodeSet, chanSet, electrodeSetFull from 1:128 to
-        % 1:130
-        electrodeSet = 1:130;
-        chanSet = [1:130];
-        electrodeSetFull = [1:130];
+        electrodeSet = 1:128;
+        chanSet = [1:128];
+        electrodeSetFull = [1:128];
 %         if(~isempty(excludeElecs))
 %            electrodeSetMask = ones(size(electrodeSetFull));
 %            electrodeSetMask(excludeElecs) = 0;
@@ -84,41 +82,42 @@ for blockIdx=1:length(formatBlockList)
 %            electrodeSet = electrodeSetFull;
 %         end
 
-%blockIdx used to be NSPIdx - checking if this works better
-        if(blockIdx == 1)
+% part one of sample and hold
+% sample indices outside of compute neural basics loop and use stim time index
+% and stim index in sample and hold within compute neural basics
+
+[stimTimeIndex, stimIndex] = sampleIndex(NS5);
+
+        if(NSPFileIdx == 1)
             % for the sensory cortex
             arrayName = '-Sensory ';
-        elseif(blockIdx == 2)
+        elseif(NSPFileIdx == 2)
             arrayName = '-AIP-IFG ';
-        elseif(blockIdx == 3)
+        elseif(NSPFileIdx == 3)
             arrayName = '-Motor ';
         else
             arrayName = '';
         end
         
-        if(length(chanSet)<26)
+        if(length(chanSet)<32)
         neuralDataOutputAll = computeNeuralBasics(NS5,chanSet,binSize,filterRange,threshold);
         else
             neuralDataOutputAll = struct('binTimes',[],'spikePower',[],'binnedTX',[],'TXtimes',[],'channels',[],'electrodes',[]);
             numChannelsTotal = length(chanSet);
-            numDivisions = 5;
+            numDivisions = 4;
             chanSubsetStart = 1;
-            division = 5;
+            division = 4;
             numChannelsSubset = numChannelsTotal/numDivisions;
             chanSubsetStart = (division-1)*numChannelsSubset+1;
             chanSubsetEnd = division*numChannelsSubset;
-            chanSubset = chanSubsetStart:chanSubsetEnd;
-
-            for i = 1:length(chanSubset)
-                if chanSubset(i) == 129
-                    
+            chanSubset = chanSubsetStart:chanSubsetEnd;                    
 
             for division = 1:numDivisions
                 numChannelsSubset = numChannelsTotal/numDivisions;
                 chanSubsetStart = (division-1)*numChannelsSubset+1;
                 chanSubsetEnd = division*numChannelsSubset;
                 chanSubset = chanSubsetStart:chanSubsetEnd;
-                neuralDataOutputChunk = computeNeuralBasics(NS5,chanSubset,binSize,filterRange,threshold,excludeChannelsNSP);
+                neuralDataOutputChunk = computeNeuralBasics(NS5,chanSubset,binSize,filterRange,threshold,excludeChannelsNSP, stimTimeIndex, stimIndex);
                 if(division == 1)
                     neuralDataOutputAll.binTimes = [neuralDataOutputAll.binTimes,neuralDataOutputChunk.binTimes];
                 end
@@ -131,9 +130,7 @@ for blockIdx=1:length(formatBlockList)
             
         end
         neuralData = neuralDataOutputAll;
-        save([neuralDataSaveDir filesep 'Single Tactor Auto Neural Basics ' num2str(blockIdx) arrayName num2str(blockNumber) '.mat'],"neuralData");
-%blockIdx used to be NSPIdx
-    end
-        end
+        save([neuralDataSaveDir filesep 'Single Tactor Auto Neural Basics ' num2str(NSPFileIdx) arrayName num2str(blockIdx) '.mat'],"neuralData");
+
     end
 end
